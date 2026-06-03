@@ -348,6 +348,21 @@ input:focus,select:focus{border-color:#185FA5;box-shadow:0 0 0 2px rgba(24,95,16
       </div>
     </div>
   </div>
+
+  <!-- EDIT MODAL -->
+  <div class="modal-bg" id="edit-modal-bg" onclick="closeEditModal(event)">
+    <div class="modal-box" style="max-width:480px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:14px;font-weight:500;" id="edit-modal-title">Editar</div>
+        <button class="btn bdanger" onclick="forceCloseEditModal()"><i class="ti ti-x"></i></button>
+      </div>
+      <div id="edit-modal-body"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button class="btn" onclick="forceCloseEditModal()">Cancelar</button>
+        <button class="btn primary" id="edit-save-btn">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -739,6 +754,7 @@ function renderCobros(){
     '<div class="cactions">'+
     '<button class="btn bwa" onclick="waCobro('+c.id+')" title="WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>'+
     '<button class="btn bgmail" onclick="gmailCobro('+c.id+')" title="Gmail"><i class="ti ti-mail"></i></button>'+
+    '<button class="btn" style="padding:4px 7px;" onclick="editCobro('+c.id+')" title="Editar"><i class="ti ti-edit"></i></button>'+
     '<button class="btn bsuccess" style="padding:4px 7px;" onclick="markPagado('+c.id+')"><i class="ti ti-'+(c.estado==='pagado'?'rotate':'check')+'"></i></button>'+
     '<button class="btn bdanger" onclick="deleteCobro('+c.id+')"><i class="ti ti-trash"></i></button>'+
     '</div></div>'
@@ -762,7 +778,8 @@ function renderGastos(){
   document.getElementById('gastos-list').innerHTML=S.gastos.length?S.gastos.map(g=>
     '<div class="gitem"><div><div style="font-size:12px;font-weight:500;">'+g.desc+'</div>'+
     '<div style="font-size:10px;color:#888;">'+g.cat+' · <span style="color:#185FA5;">Luciano</span>'+(g.cuentaNombre?' · 🏦 '+g.cuentaNombre:'')+'</div></div>'+
-    '<div style="display:flex;align-items:center;gap:7px;"><div style="font-size:12px;font-weight:500;">'+fmt(g.monto)+'</div>'+
+    '<div style="display:flex;align-items:center;gap:5px;"><div style="font-size:12px;font-weight:500;">'+fmt(g.monto)+'</div>'+
+    '<button class="btn" style="padding:4px 7px;" onclick="editGasto('+g.id+')" title="Editar"><i class="ti ti-edit"></i></button>'+
     '<button class="btn bdanger" onclick="deleteGasto('+g.id+')"><i class="ti ti-trash"></i></button></div></div>'
   ).join(''):'<div class="empty">Sin gastos fijos</div>';
   document.getElementById('gastos-var').innerHTML=S.cobros.length?S.cobros.map(c=>
@@ -806,7 +823,7 @@ function renderAhorro(){
     '<div class="metric"><div class="mlabel">Progreso</div><div class="mvalue" style="color:#185FA5;">'+pct.toFixed(1)+'%</div></div>';
   const bar=document.getElementById('a-bar');if(bar)bar.style.width=pct.toFixed(1)+'%';
   const lbl=document.getElementById('a-label');if(lbl)lbl.textContent=fmt(saldo)+' de '+fmt(meta)+(pct>=100?' — ¡Meta alcanzada!':' — '+pct.toFixed(1)+'% completado');
-  document.getElementById('a-history').innerHTML=S.ahorro.historial.length?S.ahorro.historial.map(h=>'<div class="hitem"><div><span style="font-weight:500;">'+h.desc+'</span> <span style="color:#888;margin-left:5px;">'+fdt(h.fecha)+'</span></div><span style="color:#0F6E56;font-weight:500;">+'+fmt(h.monto)+'</span></div>').join(''):'<div class="empty">Sin aportes aún</div>';
+  document.getElementById('a-history').innerHTML=S.ahorro.historial.length?S.ahorro.historial.map(h=>'<div class="hitem"><div><span style="font-weight:500;">'+h.desc+'</span> <span style="color:#888;margin-left:5px;">'+fdt(h.fecha)+'</span></div><div style="display:flex;align-items:center;gap:5px;"><span style="color:#0F6E56;font-weight:500;">+'+fmt(h.monto)+'</span><button class="btn" style="padding:3px 6px;font-size:11px;" onclick="editAhorro('+h.id+')" title="Editar"><i class="ti ti-edit"></i></button><button class="btn bdanger" style="padding:3px 6px;" onclick="deleteAhorro('+h.id+')" title="Eliminar"><i class="ti ti-trash"></i></button></div></div>').join(''):'<div class="empty">Sin aportes aún</div>';
 }
 
 function renderCierre(){
@@ -849,6 +866,90 @@ function renderHistorial(){
     '</div></div>'
   ).join(''):'<div class="empty">Sin cierres aún.</div>';
 }
+
+// ── EDIT MODAL ──
+window.closeEditModal = function(e){ if(e&&e.target!==document.getElementById('edit-modal-bg'))return; document.getElementById('edit-modal-bg').classList.remove('open'); };
+window.forceCloseEditModal = function(){ document.getElementById('edit-modal-bg').classList.remove('open'); };
+
+function openEditModal(title, bodyHtml, onSave){
+  document.getElementById('edit-modal-title').textContent = title;
+  document.getElementById('edit-modal-body').innerHTML = bodyHtml;
+  document.getElementById('edit-save-btn').onclick = function(){ onSave(); };
+  document.getElementById('edit-modal-bg').classList.add('open');
+}
+
+window.editCobro = function(id){
+  const c = S.cobros.find(x=>x.id===id); if(!c) return;
+  const cats = ['Alimentación','Servicios','Transporte','Colegio / hijos','Empleadas','Salud','Entretenimiento','Otro'];
+  const catOpts = cats.map(ct=>'<option'+(ct===c.cat?' selected':'')+'>'+ct+'</option>').join('');
+  const body = `
+    <div class="frow c2"><div class="fg"><label>Descripción</label><input type="text" id="e-desc" value="${c.desc}"/></div>
+    <div class="fg"><label>Monto ($)</label><input type="number" id="e-monto" value="${c.monto}" min="0" step="0.01"/></div></div>
+    <div class="frow c2"><div class="fg"><label>¿Quién pagó?</label><select id="e-quien">
+      <option value="ella"${c.quien==='ella'?' selected':''}>Domenica</option>
+      <option value="yo"${c.quien==='yo'?' selected':''}>Luciano</option>
+    </select></div>
+    <div class="fg"><label>Categoría</label><select id="e-cat">${catOpts}</select></div></div>
+    <div class="frow c2"><div class="fg"><label>Nota</label><input type="text" id="e-nota" value="${c.nota||''}"/></div>
+    <div class="fg"><label>Estado</label><select id="e-estado">
+      <option value="pendiente"${c.estado==='pendiente'?' selected':''}>Pendiente</option>
+      <option value="pagado"${c.estado==='pagado'?' selected':''}>Pagado</option>
+    </select></div></div>`;
+  openEditModal('✏️ Editar cobro', body, ()=>{
+    const monto = parseFloat(document.getElementById('e-monto').value);
+    if(!document.getElementById('e-desc').value.trim()||isNaN(monto)||monto<=0){toast('Completa todos los campos');return;}
+    c.desc = document.getElementById('e-desc').value.trim();
+    c.monto = monto;
+    c.quien = document.getElementById('e-quien').value;
+    c.cat = document.getElementById('e-cat').value;
+    c.nota = document.getElementById('e-nota').value.trim();
+    c.estado = document.getElementById('e-estado').value;
+    save(); renderAll(); forceCloseEditModal(); toast('Cobro actualizado ✓');
+  });
+};
+
+window.editGasto = function(id){
+  const g = S.gastos.find(x=>x.id===id); if(!g) return;
+  const gcats = ['Vivienda','Alimentación','Transporte','Servicios','Colegio / hijos','Empleadas','Salud','Entretenimiento','Inversiones','Otro'];
+  const catOpts = gcats.map(ct=>'<option'+(ct===g.cat?' selected':'')+'>'+ct+'</option>').join('');
+  const body = `
+    <div class="frow c2"><div class="fg"><label>Concepto</label><input type="text" id="e-gdesc" value="${g.desc}"/></div>
+    <div class="fg"><label>Monto ($)</label><input type="number" id="e-gmonto" value="${g.monto}" min="0" step="0.01"/></div></div>
+    <div class="frow"><div class="fg"><label>Categoría</label><select id="e-gcat">${catOpts}</select></div></div>`;
+  openEditModal('✏️ Editar gasto fijo', body, ()=>{
+    const monto = parseFloat(document.getElementById('e-gmonto').value);
+    if(!document.getElementById('e-gdesc').value.trim()||isNaN(monto)||monto<=0){toast('Completa todos los campos');return;}
+    g.desc = document.getElementById('e-gdesc').value.trim();
+    g.monto = monto;
+    g.cat = document.getElementById('e-gcat').value;
+    save(); renderAll(); forceCloseEditModal(); toast('Gasto actualizado ✓');
+  });
+};
+
+window.editAhorro = function(id){
+  const h = S.ahorro.historial.find(x=>x.id===id); if(!h) return;
+  const body = `
+    <div class="frow c2"><div class="fg"><label>Monto ($)</label><input type="number" id="e-amonto" value="${h.monto}" min="0" step="0.01"/></div>
+    <div class="fg"><label>Descripción</label><input type="text" id="e-adesc" value="${h.desc}"/></div></div>`;
+  openEditModal('✏️ Editar aporte', body, ()=>{
+    const monto = parseFloat(document.getElementById('e-amonto').value);
+    if(isNaN(monto)||monto<=0){toast('Monto inválido');return;}
+    const diff = monto - h.monto;
+    h.monto = monto;
+    h.desc = document.getElementById('e-adesc').value.trim()||'Aporte manual';
+    S.ahorro.saldo = Math.max(0, S.ahorro.saldo + diff);
+    save(); renderAll(); forceCloseEditModal(); toast('Aporte actualizado ✓');
+  });
+};
+
+window.deleteAhorro = function(id){
+  showConfirm('¿Eliminar este aporte del historial?', ()=>{
+    const h = S.ahorro.historial.find(x=>x.id===id);
+    if(h){ S.ahorro.saldo = Math.max(0, S.ahorro.saldo - h.monto); }
+    S.ahorro.historial = S.ahorro.historial.filter(x=>x.id!==id);
+    save(); renderAll(); toast('Aporte eliminado ✓');
+  });
+};
 
 function renderAll(){
   renderCobros();renderGastos();renderCuentas();renderAhorro();renderCierre();renderHistorial();
